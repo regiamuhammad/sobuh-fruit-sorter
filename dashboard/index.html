@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOBUH Dashboard</title>
+<style>
+  :root {
+    --bg: #f6f7f2; --panel: #ffffff; --ink: #1f2a1c; --muted: #66705f; --line: #e3e7dc;
+    --light: #3f9b4a; --heavy: #e07b1a; --accent: #8bbf2d; --chip: #eef3e4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141812; --panel: #1d221a; --ink: #e8eee2; --muted: #9aa592; --line: #2e3529;
+      --light: #5cc068; --heavy: #f2994a; --accent: #a4d64b; --chip: #262d21;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  .top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  h1 { margin: 0; font-size: 22px; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, .btn {
+    font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #17200f; }
+  button:hover, .btn:hover { filter: brightness(0.97); }
+  input[type=file] { display: none; }
+  .info { margin: 14px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--chip); font-size: 14px; }
+  .info.warn { background: #fff4e0; color: #7a4b00; }
+  @media (prefers-color-scheme: dark) { .info.warn { background: #3a2c12; color: #ffd28a; } }
+  .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 16px 0; font-size: 14px; }
+  select, input[type=number] { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  input[type=number] { width: 80px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .card .value { font-size: 26px; font-weight: 700; margin-top: 2px; }
+  .card .note { color: var(--muted); font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .panel h2 { margin: 0 0 8px; font-size: 15px; }
+  svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tablebox { max-height: 380px; overflow: auto; margin-top: 12px; }
+  .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; }
+  .badge.LIGHT { background: var(--light); } .badge.HEAVY { background: var(--heavy); }
+  .empty { text-align: center; padding: 56px 16px; color: var(--muted); }
+  .empty h2 { color: var(--ink); }
+  .empty ol { display: inline-block; text-align: left; }
+  .drop { position: fixed; inset: 0; background: rgba(139,191,45,.18); border: 4px dashed var(--accent);
+          display: none; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; z-index: 9; }
+  body.dragging .drop { display: flex; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px 16px; }
+  .axis { fill: var(--muted); font-size: 11px; }
+  .gridline { stroke: var(--line); }
+</style>
+</head>
+<body>
+<div class="drop">Drop SOBUH.CSV here</div>
+<header>
+  <div class="wrap top">
+    <div>
+      <h1>⚖️ SOBUH <span>Dashboard</span></h1>
+      <div class="sub">Fruit-sorting log viewer · runs fully offline in your browser</div>
+    </div>
+    <div class="actions">
+      <label class="btn primary" for="file">Open CSV file</label>
+      <input id="file" type="file" accept=".csv,text/csv">
+      <button id="example" type="button">Load example data</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="info" class="info" hidden></div>
+
+  <section id="empty" class="empty">
+    <h2>No data loaded yet</h2>
+    <p>Open the log file written by the sorter, or try the example data.</p>
+    <ol>
+      <li>Power off the sorter and take out the microSD card.</li>
+      <li>Insert the card into your computer.</li>
+      <li>Click <b>Open CSV file</b> and choose <code>SOBUH.CSV</code>, or drag the file onto this page.</li>
+    </ol>
+  </section>
+
+  <section id="view" hidden>
+    <div class="controls">
+      <label>Session <select id="session"></select></label>
+      <label>Heavy threshold <input id="threshold" type="number" step="0.5" min="0" value="12"> g</label>
+      <span class="sub" id="thresholdNote"></span>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="label">Fruits sorted</div><div class="value" id="cTotal">–</div><div class="note" id="cSessions"></div></div>
+      <div class="card"><div class="label">Light</div><div class="value" id="cLight" style="color:var(--light)">–</div><div class="note" id="cLightPct"></div></div>
+      <div class="card"><div class="label">Heavy</div><div class="value" id="cHeavy" style="color:var(--heavy)">–</div><div class="note" id="cHeavyPct"></div></div>
+      <div class="card"><div class="label">Mean weight</div><div class="value" id="cMean">–</div><div class="note" id="cSd"></div></div>
+      <div class="card"><div class="label">Range</div><div class="value" id="cRange">–</div><div class="note">min – max</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <h2>Weight of each fruit</h2>
+        <svg id="scatter" viewBox="0 0 520 260" role="img" aria-label="Weight of each fruit"></svg>
+        <div class="legend"><span><i class="dot" style="background:var(--light)"></i>Light</span><span><i class="dot" style="background:var(--heavy)"></i>Heavy</span><span>- - - threshold</span></div>
+      </div>
+      <div class="panel">
+        <h2>Weight distribution</h2>
+        <svg id="hist" viewBox="0 0 520 260" role="img" aria-label="Weight distribution"></svg>
+        <div class="legend"><span>Bin width 0.5 g</span></div>
+      </div>
+    </div>
+
+    <div class="panel tablebox">
+      <table>
+        <thead><tr><th>Session</th><th class="num">Fruit</th><th class="num">Time</th><th class="num">Weight (g)</th><th>Category</th><th class="num">Servo</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<footer>SOBUH · data never leaves your computer</footer>
+
+<script id="exampleCsv" type="text/csv">
+session,fruit,uptime_s,weight_g,category,servo_deg
+1,1,38,12.67,HEAVY,150
+1,2,47,13.71,HEAVY,150
+1,3,59,11.92,LIGHT,30
+1,4,73,9.11,LIGHT,30
+1,5,82,10.09,LIGHT,30
+1,6,93,9.83,LIGHT,30
+1,7,105,9.62,LIGHT,30
+1,8,114,11.42,LIGHT,30
+1,9,124,10.42,LIGHT,30
+1,10,131,11.41,LIGHT,30
+1,11,140,10.84,LIGHT,30
+1,12,148,9.41,LIGHT,30
+1,13,162,12.18,HEAVY,150
+1,14,168,13.40,HEAVY,150
+2,1,42,10.56,LIGHT,30
+2,2,50,10.50,LIGHT,30
+2,3,61,10.66,LIGHT,30
+2,4,70,12.74,HEAVY,150
+2,5,81,10.55,LIGHT,30
+2,6,90,12.42,HEAVY,150
+2,7,102,11.86,LIGHT,30
+2,8,111,12.26,HEAVY,150
+2,9,117,13.02,HEAVY,150
+2,10,131,11.58,LIGHT,30
+2,11,142,12.09,HEAVY,150
+2,12,154,9.74,LIGHT,30
+2,13,169,14.18,HEAVY,150
+2,14,184,13.82,HEAVY,150
+2,15,193,11.96,LIGHT,30
+2,16,201,13.58,HEAVY,150
+2,17,210,10.34,LIGHT,30
+2,18,218,13.38,HEAVY,150
+</script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+let data = [];
+
+// ---------- CSV parsing ----------
+function parseCsv(text) {
+  const lines = text.replace(/^﻿/, "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) throw new Error("The file is empty.");
+  const head = lines[0].split(",").map((h) => h.trim().toLowerCase());
+  const need = ["session", "fruit", "uptime_s", "weight_g", "category", "servo_deg"];
+  const missing = need.filter((n) => !head.includes(n));
+  if (missing.length) throw new Error("Not a SOBUH log: missing column(s) " + missing.join(", ") + ".");
+  const idx = Object.fromEntries(need.map((n) => [n, head.indexOf(n)]));
+  const rows = [];
+  for (const line of lines.slice(1)) {
+    const c = line.split(",");
+    const row = {
+      session: parseInt(c[idx.session], 10),
+      fruit: parseInt(c[idx.fruit], 10),
+      uptime: parseInt(c[idx.uptime_s], 10),
+      weight: parseFloat(c[idx.weight_g]),
+      category: String(c[idx.category] || "").trim().toUpperCase(),
+      servo: parseInt(c[idx.servo_deg], 10),
+    };
+    if (Number.isFinite(row.weight) && Number.isFinite(row.session)) rows.push(row);
+  }
+  if (!rows.length) throw new Error("No data rows found.");
+  return rows;
+}
+
+function load(text, label, isExample) {
+  try {
+    data = parseCsv(text);
+  } catch (err) {
+    showInfo(err.message, true);
+    return;
+  }
+  const sessions = [...new Set(data.map((r) => r.session))].sort((a, b) => a - b);
+  const sel = $("session");
+  sel.replaceChildren(new Option("All sessions", "all"), ...sessions.map((s) => new Option("Session " + s, s)));
+  showInfo((isExample ? "Showing synthetic example data (not real measurements). " : "") +
+           `Loaded ${label}: ${data.length} fruits in ${sessions.length} session(s).`, isExample);
+  $("empty").hidden = true;
+  $("view").hidden = false;
+  render();
+}
+
+function showInfo(msg, warn) {
+  const el = $("info");
+  el.textContent = msg;
+  el.className = "info" + (warn ? " warn" : "");
+  el.hidden = false;
+}
+
+// ---------- rendering ----------
+const fmt = (n, d = 2) => n.toFixed(d);
+function mmss(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function render() {
+  const pick = $("session").value;
+  const rows = pick === "all" ? data : data.filter((r) => String(r.session) === pick);
+  const thr = parseFloat($("threshold").value) || 12;
+  const w = rows.map((r) => r.weight);
+  const light = rows.filter((r) => r.category === "LIGHT").length;
+  const heavy = rows.filter((r) => r.category === "HEAVY").length;
+  const mean = w.reduce((a, b) => a + b, 0) / (w.length || 1);
+  const sd = Math.sqrt(w.reduce((a, b) => a + (b - mean) ** 2, 0) / (w.length > 1 ? w.length - 1 : 1));
+  const sessions = new Set(rows.map((r) => r.session)).size;
+
+  $("cTotal").textContent = rows.length;
+  $("cSessions").textContent = sessions + (sessions === 1 ? " session" : " sessions");
+  $("cLight").textContent = light;
+  $("cHeavy").textContent = heavy;
+  $("cLightPct").textContent = rows.length ? fmt(100 * light / rows.length, 0) + "% of fruits" : "";
+  $("cHeavyPct").textContent = rows.length ? fmt(100 * heavy / rows.length, 0) + "% of fruits" : "";
+  $("cMean").textContent = rows.length ? fmt(mean) + " g" : "–";
+  $("cSd").textContent = rows.length > 1 ? "± " + fmt(sd) + " g (SD)" : "";
+  $("cRange").textContent = rows.length ? `${fmt(Math.min(...w), 1)}–${fmt(Math.max(...w), 1)} g` : "–";
+
+  const mismatch = rows.filter((r) => (r.weight >= thr ? "HEAVY" : "LIGHT") !== r.category).length;
+  $("thresholdNote").textContent = mismatch
+    ? `${mismatch} fruit(s) would change category at ${thr} g`
+    : `all fruits match the ${thr} g threshold`;
+
+  drawScatter(rows, thr);
+  drawHist(w, thr);
+
+  const tbody = $("rows");
+  tbody.replaceChildren(...rows.map((r) => {
+    const tr = document.createElement("tr");
+    const cells = [r.session, r.fruit, mmss(r.uptime), fmt(r.weight), null, r.servo + "°"];
+    cells.forEach((v, i) => {
+      const td = document.createElement("td");
+      if (i === 4) {
+        const b = document.createElement("span");
+        b.className = "badge " + r.category;
+        b.textContent = r.category;
+        td.append(b);
+      } else {
+        td.textContent = v;
+      }
+      if ([1, 2, 3, 5].includes(i)) td.className = "num";
+      tr.append(td);
+    });
+    return tr;
+  }));
+}
+
+function el(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function niceRange(lo, hi) {
+  lo = Math.floor(lo - 0.5); hi = Math.ceil(hi + 0.5);
+  if (hi - lo < 4) { hi = lo + 4; }
+  return [Math.max(0, lo), hi];
+}
+
+function axes(svg, box, x0, x1, y0, y1, yTicks, xLabel) {
+  for (const t of yTicks) {
+    const y = box.y + box.h - (t - y0) / (y1 - y0) * box.h;
+    svg.append(el("line", { x1: box.x, x2: box.x + box.w, y1: y, y2: y, class: "gridline" }));
+    svg.append(el("text", { x: box.x - 6, y: y + 4, "text-anchor": "end", class: "axis" }, t));
+  }
+  svg.append(el("text", { x: box.x + box.w / 2, y: box.y + box.h + 34, "text-anchor": "middle", class: "axis" }, xLabel));
+}
+
+function thresholdLineY(svg, box, y0, y1, thr) {
+  if (thr < y0 || thr > y1) return;
+  const y = box.y + box.h - (thr - y0) / (y1 - y0) * box.h;
+  svg.append(el("line", { x1: box.x, x2: box.x + box.w, y1: y, y2: y, stroke: "var(--heavy)", "stroke-dasharray": "5 4", "stroke-width": 1.5 }));
+  svg.append(el("text", { x: box.x + box.w, y: y - 5, "text-anchor": "end", class: "axis" }, thr + " g"));
+}
+
+function drawScatter(rows, thr) {
+  const svg = $("scatter");
+  svg.replaceChildren();
+  if (!rows.length) return;
+  const box = { x: 44, y: 12, w: 460, h: 200 };
+  const [y0, y1] = niceRange(Math.min(thr, ...rows.map((r) => r.weight)), Math.max(thr, ...rows.map((r) => r.weight)));
+  const step = Math.max(1, Math.round((y1 - y0) / 5));
+  const ticks = [];
+  for (let t = y0; t <= y1; t += step) ticks.push(t);
+  axes(svg, box, 0, rows.length, y0, y1, ticks, "Fruit (in logging order)");
+  thresholdLineY(svg, box, y0, y1, thr);
+  const n = rows.length;
+  rows.forEach((r, i) => {
+    const x = box.x + (n === 1 ? box.w / 2 : (i / (n - 1)) * box.w);
+    const y = box.y + box.h - (r.weight - y0) / (y1 - y0) * box.h;
+    const c = el("circle", { cx: x, cy: y, r: 5, fill: r.category === "HEAVY" ? "var(--heavy)" : "var(--light)" });
+    c.append(el("title", {}, `Session ${r.session}, fruit ${r.fruit}: ${fmt(r.weight)} g (${r.category})`));
+    svg.append(c);
+  });
+}
+
+function drawHist(weights, thr) {
+  const svg = $("hist");
+  svg.replaceChildren();
+  if (!weights.length) return;
+  const box = { x: 44, y: 12, w: 460, h: 200 };
+  const bw = 0.5;
+  const lo = Math.floor(Math.min(thr, ...weights) - 0.5);
+  const hi = Math.ceil(Math.max(thr, ...weights) + 0.5);
+  const bins = Math.max(1, Math.round((hi - lo) / bw));
+  const counts = new Array(bins).fill(0);
+  for (const v of weights) counts[Math.min(bins - 1, Math.floor((v - lo) / bw))]++;
+  const peak = Math.max(...counts);
+  const ticks = [];
+  const yStep = Math.max(1, Math.ceil(peak / 4));
+  for (let t = 0; t <= peak; t += yStep) ticks.push(t);
+  axes(svg, box, lo, hi, 0, Math.max(peak, ticks[ticks.length - 1]), ticks, "Weight (g)");
+  const yMax = Math.max(peak, ticks[ticks.length - 1]);
+  const colW = box.w / bins;
+  counts.forEach((c, i) => {
+    if (!c) return;
+    const left = lo + i * bw;
+    const h = c / yMax * box.h;
+    const rect = el("rect", { x: box.x + i * colW + 1, y: box.y + box.h - h, width: Math.max(1, colW - 2), height: h, rx: 2,
+                              fill: left >= thr ? "var(--heavy)" : "var(--light)" });
+    rect.append(el("title", {}, `${fmt(left, 1)}–${fmt(left + bw, 1)} g: ${c} fruit(s)`));
+    svg.append(rect);
+  });
+  for (let v = Math.ceil(lo); v <= hi; v += Math.max(1, Math.round((hi - lo) / 8))) {
+    const x = box.x + (v - lo) / (hi - lo) * box.w;
+    svg.append(el("text", { x, y: box.y + box.h + 16, "text-anchor": "middle", class: "axis" }, v));
+  }
+  const tx = box.x + (thr - lo) / (hi - lo) * box.w;
+  svg.append(el("line", { x1: tx, x2: tx, y1: box.y, y2: box.y + box.h, stroke: "var(--heavy)", "stroke-dasharray": "5 4", "stroke-width": 1.5 }));
+}
+
+// ---------- events ----------
+$("file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (f) f.text().then((t) => load(t, f.name, false));
+  e.target.value = "";
+});
+$("example").addEventListener("click", () => load($("exampleCsv").textContent, "example_SOBUH.CSV", true));
+$("session").addEventListener("change", render);
+if (location.hash === "#example") $("example").click();  // e.g. index.html#example
+$("threshold").addEventListener("input", render);
+
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { e.preventDefault(); dragDepth++; document.body.classList.add("dragging"); });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("dragging");
+  const f = e.dataTransfer.files[0];
+  if (f) f.text().then((t) => load(t, f.name, false));
+});
+</script>
+</body>
+</html>
