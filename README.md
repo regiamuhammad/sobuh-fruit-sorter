@@ -31,7 +31,7 @@ shows the weight live on a **16×2 I2C LCD**, and prints a data line for every f
 > [!NOTE]
 > **About this project.** SOBUH (*Sistem Sortir Buah* — fruit sorting system) was built in **2024** as the final project of the *Instrumentation and Control* lab course at IPB University. In **2026** I turned it into this repository with the help of **Claude** (Anthropic's AI assistant): the original sketch is preserved in [`original/`](original/), and an improved version with the **same sorting logic** lives in [`sobuh/`](sobuh/). A simple offline [dashboard](dashboard/) was added to view the recorded data.
 
-> [!WARNING]
+> [!NOTE]
 > The improved sketch has **not yet been tested on the physical hardware**. The original 2024 sketch is the one that ran on the prototype. The dashboard was tested in a browser with example data and simulated Serial Monitor output.
 
 ---
