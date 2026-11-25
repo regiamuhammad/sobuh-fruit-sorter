@@ -37,6 +37,9 @@
   .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 16px 0; font-size: 14px; }
   select, input[type=number] { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
   input[type=number] { width: 80px; }
+  textarea { width: 100%; font: 13px/1.4 Consolas, "Courier New", monospace; padding: 10px; border-radius: 8px;
+             border: 1px solid var(--line); background: var(--bg); color: var(--ink); resize: vertical; }
+  kbd { font: 12px Consolas, monospace; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
   .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
@@ -68,7 +71,7 @@
 </style>
 </head>
 <body>
-<div class="drop">Drop SOBUH.CSV here</div>
+<div class="drop">Drop a .csv or .txt file here</div>
 <header>
   <div class="wrap top">
     <div>
@@ -76,8 +79,9 @@
       <div class="sub">Fruit-sorting log viewer · runs fully offline in your browser</div>
     </div>
     <div class="actions">
-      <label class="btn primary" for="file">Open CSV file</label>
-      <input id="file" type="file" accept=".csv,text/csv">
+      <button id="pasteBtn" class="btn primary" type="button">Paste Serial output</button>
+      <label class="btn" for="file">Open file</label>
+      <input id="file" type="file" accept=".csv,.txt,text/csv,text/plain">
       <button id="example" type="button">Load example data</button>
     </div>
   </div>
@@ -86,14 +90,25 @@
 <main class="wrap">
   <div id="info" class="info" hidden></div>
 
+  <section id="pastePanel" class="panel" style="margin-top:14px" hidden>
+    <h2>Paste the Serial Monitor output</h2>
+    <p class="sub">In the Arduino IDE Serial Monitor: click inside the output, press <kbd>Ctrl</kbd>+<kbd>A</kbd> then <kbd>Ctrl</kbd>+<kbd>C</kbd>, and paste it below. Only lines containing <code>DATA,</code> are used; everything else is ignored.</p>
+    <textarea id="pasteBox" rows="8" spellcheck="false" placeholder="DATA,1,1,38,12.67,HEAVY,150&#10;DATA,1,2,47,10.53,LIGHT,30&#10;..."></textarea>
+    <div class="actions" style="margin-top:10px">
+      <button id="pasteGo" class="btn primary" type="button">Show data</button>
+      <button id="pasteCancel" type="button">Cancel</button>
+    </div>
+  </section>
+
   <section id="empty" class="empty">
     <h2>No data loaded yet</h2>
-    <p>Open the log file written by the sorter, or try the example data.</p>
+    <p>Load the data printed by the sorter, or try the example data.</p>
     <ol>
-      <li>Power off the sorter and take out the microSD card.</li>
-      <li>Insert the card into your computer.</li>
-      <li>Click <b>Open CSV file</b> and choose <code>SOBUH.CSV</code>, or drag the file onto this page.</li>
+      <li>Connect the sorter to your computer and open the Arduino IDE <b>Serial Monitor</b> at 9600 baud.</li>
+      <li>Sort your fruits. Every fruit prints a line starting with <code>DATA,</code>.</li>
+      <li>Copy the whole Serial Monitor output, click <b>Paste Serial output</b>, and paste it.</li>
     </ol>
+    <p class="sub">You can also save the output as a <code>.txt</code> or <code>.csv</code> file and open it with <b>Open file</b>.</p>
   </section>
 
   <section id="view" hidden>
@@ -176,14 +191,20 @@ const NS = "http://www.w3.org/2000/svg";
 let data = [];
 
 // ---------- CSV parsing ----------
+const COLUMNS = ["session", "fruit", "uptime_s", "weight_g", "category", "servo_deg"];
+
 function parseCsv(text) {
-  const lines = text.replace(/^﻿/, "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (!lines.length) throw new Error("The file is empty.");
+  let lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) throw new Error("No text found.");
+  // Serial Monitor output: keep only "DATA," lines (an IDE timestamp may precede them).
+  const dataLines = lines.filter((l) => l.includes("DATA,")).map((l) => l.slice(l.indexOf("DATA,") + 5).trim());
+  if (dataLines.length) {
+    lines = [COLUMNS.join(","), ...dataLines.filter((l) => !l.toLowerCase().startsWith("session"))];
+  }
   const head = lines[0].split(",").map((h) => h.trim().toLowerCase());
-  const need = ["session", "fruit", "uptime_s", "weight_g", "category", "servo_deg"];
-  const missing = need.filter((n) => !head.includes(n));
-  if (missing.length) throw new Error("Not a SOBUH log: missing column(s) " + missing.join(", ") + ".");
-  const idx = Object.fromEntries(need.map((n) => [n, head.indexOf(n)]));
+  const missing = COLUMNS.filter((n) => !head.includes(n));
+  if (missing.length) throw new Error("No SOBUH data found. Paste the Serial Monitor output (lines starting with DATA,) or open a CSV with the columns " + COLUMNS.join(", ") + ".");
+  const idx = Object.fromEntries(COLUMNS.map((n) => [n, head.indexOf(n)]));
   const rows = [];
   for (const line of lines.slice(1)) {
     const c = line.split(",");
@@ -197,7 +218,7 @@ function parseCsv(text) {
     };
     if (Number.isFinite(row.weight) && Number.isFinite(row.session)) rows.push(row);
   }
-  if (!rows.length) throw new Error("No data rows found.");
+  if (!rows.length) throw new Error("No fruit data rows found yet. Sort a few fruits first.");
   return rows;
 }
 
@@ -206,7 +227,7 @@ function load(text, label, isExample) {
     data = parseCsv(text);
   } catch (err) {
     showInfo(err.message, true);
-    return;
+    return false;
   }
   const sessions = [...new Set(data.map((r) => r.session))].sort((a, b) => a - b);
   const sel = $("session");
@@ -216,6 +237,7 @@ function load(text, label, isExample) {
   $("empty").hidden = true;
   $("view").hidden = false;
   render();
+  return true;
 }
 
 function showInfo(msg, warn) {
@@ -373,7 +395,12 @@ $("file").addEventListener("change", (e) => {
   if (f) f.text().then((t) => load(t, f.name, false));
   e.target.value = "";
 });
-$("example").addEventListener("click", () => load($("exampleCsv").textContent, "example_SOBUH.CSV", true));
+$("example").addEventListener("click", () => load($("exampleCsv").textContent, "example_data.csv", true));
+$("pasteBtn").addEventListener("click", () => { $("pastePanel").hidden = false; $("pasteBox").focus(); });
+$("pasteCancel").addEventListener("click", () => { $("pastePanel").hidden = true; });
+$("pasteGo").addEventListener("click", () => {
+  if (load($("pasteBox").value, "pasted Serial output", false)) $("pastePanel").hidden = true;
+});
 $("session").addEventListener("change", render);
 if (location.hash === "#example") $("example").click();  // e.g. index.html#example
 $("threshold").addEventListener("input", render);

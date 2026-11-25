@@ -1,6 +1,6 @@
 /*
-  SOBUH — Fruit sorting by weight, with SD-card data logging
-  Arduino Uno + load cell (HX711) + servo + 16x2 I2C LCD + microSD module
+  SOBUH — Fruit sorting by weight, with Serial data output
+  Arduino Uno + load cell (HX711) + servo + 16x2 I2C LCD
 
   How it works:
     1. The load cell (through the HX711 amplifier/ADC) measures the fruit's weight.
@@ -10,30 +10,28 @@
          3 g <= weight < 12 g   -> LIGHT fruit               -> servo  30°
          weight >= 12 g         -> HEAVY fruit               -> servo 150°
        (thresholds and angles are the same as the original 2024 sketch)
-    4. Once a fruit's weight is stable, one row is appended to SOBUH.CSV on the
-       SD card. The platform must be emptied before the next fruit is logged.
-       Without an SD card the sorter still works; it just doesn't log.
+    4. Once a fruit's weight is stable, one data line is printed to the Serial
+       Monitor. The platform must be emptied before the next fruit is recorded.
+       Copy the Serial Monitor output into the dashboard (../dashboard/index.html)
+       to see statistics and charts.
 
-  CSV columns: session,fruit,uptime_s,weight_g,category,servo_deg
+  Data line format:  DATA,session,fruit,uptime_s,weight_g,category,servo_deg
     session   increases by 1 at every power-on (stored in EEPROM)
     fruit     fruit number within the session
     uptime_s  seconds since power-on (the Uno has no real-time clock)
 
   Serial commands (9600 baud):
     t = tare (zero the scale)    r = recalibrate
-    c = edit calibration factor  d = print the log file
-    h = help
+    c = edit calibration factor  h = help
 
   Requires: HX711_ADC (Olav Kallhovd), LiquidCrystal I2C (Frank de Brabander),
-  Servo, SD and SPI (the last three are bundled with the Arduino IDE).
+  Servo (bundled with the Arduino IDE).
 
   The calibration routine is adapted from the "Calibration" example of the
   HX711_ADC library — MIT License, Copyright (c) 2017 Olav Kallhovd.
 */
 
 #include <Wire.h>
-#include <SPI.h>
-#include <SD.h>
 #include <LiquidCrystal_I2C.h>
 #include <HX711_ADC.h>
 #include <Servo.h>
@@ -44,7 +42,6 @@
 const uint8_t HX711_DOUT_PIN = 3;   // HX711 DT  -> Arduino D3
 const uint8_t HX711_SCK_PIN  = 2;   // HX711 SCK -> Arduino D2
 const uint8_t SERVO_PIN      = 9;   // servo signal -> Arduino D9 (PWM)
-const uint8_t SD_CS_PIN      = 10;  // SD module CS -> D10 (MOSI D11, MISO D12, SCK D13)
 // LCD: SDA -> A4, SCL -> A5 on the Uno
 const uint8_t LCD_ADDRESS    = 0x27;  // try 0x3F if the LCD stays blank
 const uint8_t LCD_COLS       = 16;
@@ -63,11 +60,10 @@ const uint8_t ANGLE_HEAVY   = 150;
 const unsigned long STABILIZING_TIME_MS = 2000;  // HX711 settling time at start-up
 const unsigned long UPDATE_INTERVAL_MS  = 500;   // how often weight is shown and sorted
 
-// Logging: a fruit is logged once its weight changes by no more than
+// Recording: a fruit is recorded once its weight changes by no more than
 // STABLE_DELTA_G for STABLE_READINGS consecutive readings (3 x 0.5 s = 1.5 s).
 const float   STABLE_DELTA_G  = 0.5;
 const uint8_t STABLE_READINGS = 3;
-const char    LOG_FILE[]      = "SOBUH.CSV";   // 8.3 file name for the SD library
 
 // EEPROM layout
 const int CAL_EEPROM_ADDRESS     = 0;  // float, 4 bytes: calibration factor
@@ -82,9 +78,8 @@ enum Category { NO_FRUIT, LIGHT, HEAVY };
 
 unsigned long lastUpdateMs = 0;
 int currentAngle = -1;      // -1 = not set yet
-bool sdReady = false;
 uint16_t sessionId = 0;
-uint16_t fruitCount = 0;    // fruits logged in this session
+uint16_t fruitCount = 0;    // fruits recorded in this session
 
 // ----------------------------------------------------------------- helpers
 // Print one LCD row, padded with spaces so old characters are cleared.
@@ -176,52 +171,22 @@ uint16_t nextSessionId() {
   return id;
 }
 
-// ----------------------------------------------------------------- SD logging
-bool initSdCard() {
-  if (!SD.begin(SD_CS_PIN)) return false;
-  if (!SD.exists(LOG_FILE)) {
-    File f = SD.open(LOG_FILE, FILE_WRITE);
-    if (!f) return false;
-    f.println(F("session,fruit,uptime_s,weight_g,category,servo_deg"));
-    f.close();
-  }
-  return true;
+// ----------------------------------------------------------------- data output
+// One line per fruit, prefixed with "DATA," so the dashboard can pick these
+// lines out of the rest of the Serial Monitor output.
+void printDataHeader() {
+  Serial.println(F("DATA,session,fruit,uptime_s,weight_g,category,servo_deg"));
 }
 
-void logFruit(float weight, Category category) {
+void recordFruit(float weight, Category category) {
   fruitCount++;
-  if (!sdReady) return;
-  File f = SD.open(LOG_FILE, FILE_WRITE);  // FILE_WRITE appends at the end
-  if (!f) {
-    sdReady = false;
-    Serial.println(F("SD write failed - logging stopped"));
-    return;
-  }
-  f.print(sessionId);          f.print(',');
-  f.print(fruitCount);         f.print(',');
-  f.print(millis() / 1000);    f.print(',');
-  f.print(weight, 2);          f.print(',');
-  f.print(csvNameFor(category)); f.print(',');
-  f.println(angleFor(category));
-  f.close();
-  Serial.print(F("Logged fruit #"));
-  Serial.println(fruitCount);
-}
-
-void dumpLog() {
-  if (!sdReady) {
-    Serial.println(F("No SD card"));
-    return;
-  }
-  File f = SD.open(LOG_FILE, FILE_READ);
-  if (!f) {
-    Serial.println(F("Cannot open log file"));
-    return;
-  }
-  Serial.println(F("--- SOBUH.CSV ---"));
-  while (f.available()) Serial.write(f.read());
-  f.close();
-  Serial.println(F("--- end ---"));
+  Serial.print(F("DATA,"));
+  Serial.print(sessionId);          Serial.print(',');
+  Serial.print(fruitCount);         Serial.print(',');
+  Serial.print(millis() / 1000);    Serial.print(',');
+  Serial.print(weight, 2);          Serial.print(',');
+  Serial.print(csvNameFor(category)); Serial.print(',');
+  Serial.println(angleFor(category));
 }
 
 // ----------------------------------------------------------------- serial helpers
@@ -252,7 +217,7 @@ void offerToSave(float value) {
 }
 
 void printHelp() {
-  Serial.println(F("Commands: t = tare, r = recalibrate, c = edit calibration factor, d = print log, h = help"));
+  Serial.println(F("Commands: t = tare, r = recalibrate, c = edit calibration factor, h = help"));
 }
 
 // ----------------------------------------------------------------- calibration
@@ -341,13 +306,8 @@ void setup() {
   moveServo(ANGLE_NEUTRAL);
 
   sessionId = nextSessionId();
-  sdReady = initSdCard();
   Serial.print(F("Session "));
-  Serial.print(sessionId);
-  Serial.println(sdReady ? F(" - SD card ready, logging to SOBUH.CSV")
-                         : F(" - no SD card, logging disabled"));
-  lcdShow("SOBUH sorter", sdReady ? "SD card: OK" : "SD card: none");
-  delay(800);
+  Serial.println(sessionId);
 
   LoadCell.begin();
   LoadCell.start(STABILIZING_TIME_MS, true);  // true = tare after stabilizing
@@ -370,6 +330,7 @@ void setup() {
   }
 
   printHelp();
+  printDataHeader();
   lcdShow("SOBUH ready", "Place a fruit");
 }
 
@@ -377,7 +338,7 @@ void loop() {
   static bool newDataReady = false;
   static float lastWeight = 0;
   static uint8_t stableCount = 0;
-  static bool fruitLogged = false;
+  static bool fruitRecorded = false;
 
   if (LoadCell.update()) newDataReady = true;
 
@@ -386,15 +347,15 @@ void loop() {
     Category category = categorize(weight);
     moveServo(angleFor(category));
 
-    // Log each fruit once, after its weight has settled.
+    // Record each fruit once, after its weight has settled.
     if (category == NO_FRUIT) {
-      fruitLogged = false;
+      fruitRecorded = false;
       stableCount = 0;
-    } else if (!fruitLogged) {
+    } else if (!fruitRecorded) {
       stableCount = (fabs(weight - lastWeight) <= STABLE_DELTA_G) ? stableCount + 1 : 0;
       if (stableCount >= STABLE_READINGS) {
-        logFruit(weight, category);
-        fruitLogged = true;
+        recordFruit(weight, category);
+        fruitRecorded = true;
       }
     }
     lastWeight = weight;
@@ -402,7 +363,7 @@ void loop() {
     char number[10];
     dtostrf(weight, 6, 1, number);
     char line[LCD_COLS + 1];
-    snprintf(line, sizeof(line), "%sg #%u%s", number, fruitCount, sdReady ? "" : " noSD");
+    snprintf(line, sizeof(line), "%sg  #%u", number, fruitCount);
     lcdLine(0, labelFor(category));
     lcdLine(1, line);
 
@@ -424,7 +385,6 @@ void loop() {
         break;
       case 'r': calibrate(); break;
       case 'c': changeSavedCalFactor(); break;
-      case 'd': dumpLog(); break;
       case 'h': printHelp(); break;
       default: break;  // ignore newlines and unknown characters
     }

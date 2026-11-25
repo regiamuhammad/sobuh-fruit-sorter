@@ -12,6 +12,6 @@ The recommended version is [`../sobuh/sobuh.ino`](../sobuh/sobuh.ino). It keeps 
 | The servo is commanded on every reading | The servo only moves when the target position changes |
 | LCD shows only the weight | LCD shows the weight **and** the category (LIGHT / HEAVY) |
 | Magic numbers spread through the code | Pins, thresholds, angles and timing are named constants at the top |
-| No data logging | Each sorted fruit is appended to `SOBUH.CSV` on a microSD card (planned in 2024, added in 2026) |
+| No data output | Each sorted fruit is printed as a `DATA,` line that the dashboard can read |
 
 The `calibrate()` and `changeSavedCalFactor()` functions in both versions are adapted from the *Calibration* example of the [HX711_ADC](https://github.com/olkal/HX711_ADC) library (MIT, © 2017 Olav Kallhovd).

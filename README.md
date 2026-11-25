@@ -5,7 +5,7 @@
 **Weigh it. Sort it. Automatically.** 🍋
 
 An Arduino-based system that weighs each fruit with a **load cell + HX711**, uses a **servo** to push it into the right bin,<br>
-shows the weight live on a **16×2 I2C LCD**, and logs every fruit to a **microSD card**. A small offline **web dashboard** displays the log.
+shows the weight live on a **16×2 I2C LCD**, and prints a data line for every fruit over **Serial**. A small offline **web dashboard** turns that output into statistics and charts.
 
 ![Arduino](https://img.shields.io/badge/Arduino-Uno%20R3-00979D?logo=arduino&logoColor=white)
 ![C++](https://img.shields.io/badge/language-C%2B%2B-00599C?logo=cplusplus&logoColor=white)
@@ -18,7 +18,7 @@ shows the weight live on a **16×2 I2C LCD**, and logs every fruit to a **microS
 [Wiring](#-wiring) •
 [Getting started](#-getting-started) •
 [Calibration](#%EF%B8%8F-calibration) •
-[Data logging](#-data-logging) •
+[Data output](#-data-output) •
 [Dashboard](#-dashboard) •
 [Results](#-results)
 
@@ -29,10 +29,10 @@ shows the weight live on a **16×2 I2C LCD**, and logs every fruit to a **microS
 </div>
 
 > [!NOTE]
-> **About this project.** SOBUH (*Sistem Sortir Buah* — fruit sorting system) was built in **2024** as the final project of the *Instrumentation and Control* lab course at IPB University. In **2026** I turned it into this repository with the help of **Claude** (Anthropic's AI assistant): the original sketch is preserved in [`original/`](original/), and an improved version with the **same sorting logic** lives in [`sobuh/`](sobuh/). SD-card logging was planned back in 2024 and has now been implemented, along with the [dashboard](dashboard/).
+> **About this project.** SOBUH (*Sistem Sortir Buah* — fruit sorting system) was built in **2024** as the final project of the *Instrumentation and Control* lab course at IPB University. In **2026** I turned it into this repository with the help of **Claude** (Anthropic's AI assistant): the original sketch is preserved in [`original/`](original/), and an improved version with the **same sorting logic** lives in [`sobuh/`](sobuh/). A simple offline [dashboard](dashboard/) was added to view the recorded data.
 
 > [!WARNING]
-> The 2026 additions (improved sketch, SD logging, dashboard) have **not yet been tested on the physical hardware**. The dashboard was tested in a browser with example data. If you build it, please open an issue with your results.
+> The improved sketch has **not yet been tested on the physical hardware**. The original 2024 sketch is the one that ran on the prototype. The dashboard was tested in a browser with example data and simulated Serial Monitor output.
 
 ---
 
@@ -46,9 +46,9 @@ Sorting fruit by hand is slow, tiring and inconsistent. SOBUH is a low-cost proo
 - 🔀 **Automatic sorting** into *light* and *heavy* bins by a servo-driven deflector
 - 📟 **Live readout** of weight and category on a 16×2 I2C LCD
 - 🎯 **Two-point calibration** (tare + known mass) from the Serial Monitor, **saved to EEPROM**
-- ⌨️ **Serial commands** to tare, recalibrate, edit the calibration factor or print the log
-- 💾 **SD-card logging:** one CSV row per sorted fruit (session, number, time, weight, category)
-- 📈 **Offline web dashboard:** open the CSV to see totals, charts and a table, with no install and no internet
+- ⌨️ **Serial commands** to tare, recalibrate or edit the calibration factor
+- 🧾 **Data output:** one `DATA,` line per sorted fruit on the Serial Monitor (session, number, time, weight, category)
+- 📈 **Offline web dashboard:** paste the Serial Monitor output to see totals, charts and a table, with no install and no internet
 - 💸 **Cheap:** about **Rp 183,000** in parts, with styrofoam and a lunch box as the enclosure
 
 ---
@@ -57,7 +57,7 @@ Sorting fruit by hand is slow, tiring and inconsistent. SOBUH is a low-cost proo
 
 ```mermaid
 flowchart TD
-    A([Power on]) --> B[Init LCD, servo → 90°, SD card,<br/>HX711 tare after 2 s]
+    A([Power on]) --> B[Init LCD, servo → 90°,<br/>HX711 tare after 2 s]
     B --> C{Valid calibration<br/>factor in EEPROM?}
     C -- yes --> D[Load factor]
     C -- no --> E[Calibrate via Serial Monitor<br/>tare → known mass → save]
@@ -69,7 +69,7 @@ flowchart TD
     G -- "≥ 12 g" --> J[HEAVY<br/>servo 150°]
     H & I & J --> K[Show weight + category on LCD]
     I & J --> L{Weight stable<br/>for 1.5 s?}
-    L -- "yes, once per fruit" --> M[(Append row to<br/>SOBUH.CSV)]
+    L -- "yes, once per fruit" --> M[/Print DATA line<br/>to Serial/]
     K --> F
 ```
 
@@ -117,7 +117,6 @@ The 12 g boundary was chosen for the test fruit (key limes, *jeruk nipis*). Chan
 | 8 | Instant noodles 🍜 *(yes, it's in the original budget)* | 1 | 5,000 |
 | | **Total (2024 prototype)** | | **Rp 183,000** |
 
-**Added for data logging (2026):** a microSD card module (SPI, with an on-board 3.3 V regulator and level shifter) and a microSD card formatted as **FAT32**. These were not part of the original budget.
 
 **Mechanical parts:** styrofoam sheets, a plastic lunch box, hot glue and a cutter.
 
@@ -140,11 +139,7 @@ The 12 g boundary was chosen for the test fruit (key limes, *jeruk nipis*). Chan
 | LCD I2C **SDA** | Arduino **A4** | |
 | LCD I2C **SCL** | Arduino **A5** | |
 | LCD I2C **VCC / GND** | 5V / GND | I2C address `0x27` (try `0x3F` if blank) |
-| SD module **CS** | Arduino **D10** | `SD_CS_PIN` *(new)* |
-| SD module **MOSI / MISO / SCK** | Arduino **D11 / D12 / D13** | hardware SPI on the Uno *(new)* |
-| SD module **VCC / GND** | 5V / GND | use a module with a 3.3 V regulator *(new)* |
 
-<sub>The Fritzing diagram shows the original 2024 circuit, without the SD module.</sub>
 
 > [!TIP]
 > A servo can draw current spikes that make the HX711 reading jump. If you see noisy weights while the servo moves, power the servo from a separate 5 V supply (with a shared GND) or add a 470–1000 µF capacitor across its supply.
@@ -157,10 +152,9 @@ The 12 g boundary was chosen for the test fruit (key limes, *jeruk nipis*). Chan
 2. **Install the libraries** (*Tools → Manage Libraries…*):
    - **HX711_ADC** by Olav Kallhovd
    - **LiquidCrystal I2C** by Frank de Brabander
-   - **Servo**, **SD** and **SPI** (bundled with the IDE)
+   - **Servo** (bundled with the IDE)
 3. **Open** [`sobuh/sobuh.ino`](sobuh/sobuh.ino), select **Arduino Uno** and the right port, and **upload**.
 4. **Open the Serial Monitor** at **9600 baud**. On the first run there is no calibration stored yet, so follow the calibration steps below.
-5. *(Optional)* Insert a FAT32 microSD card before powering on to enable logging.
 
 ```text
 sobuh-fruit-sorter/
@@ -172,7 +166,7 @@ sobuh-fruit-sorter/
 │       └── sobuh_original.ino    # sketch exactly as in the 2024 report
 ├── dashboard/
 │   ├── index.html                # 📈 offline dashboard (open in a browser)
-│   └── example_SOBUH.CSV         # synthetic example log
+│   └── example_data.csv          # synthetic example data
 ├── docs/images/                  # wiring, 3D design, flowchart, photos, screenshots
 ├── LICENSE                       # MIT
 ├── THIRD_PARTY_NOTICES.md        # HX711_ADC (MIT) notice
@@ -198,27 +192,28 @@ Calibration converts the HX711's raw numbers into grams. You only need to do it 
 | `t` | Tare: set the current load as zero |
 | `r` | Run the full calibration again |
 | `c` | Type in a calibration factor manually |
-| `d` | Print the SD log file to the Serial Monitor |
 | `h` | Show help |
 
 ---
 
-## 💾 Data logging
+## 🧾 Data output
 
-With a microSD card inserted, SOBUH appends **one row per fruit** to `SOBUH.CSV`. A fruit is logged once its weight has been **stable for 1.5 s** (three readings within ±0.5 g). The next fruit is logged only after the platform has been emptied, so a fruit resting on the scale is never counted twice. Without an SD card, sorting works exactly the same and the LCD shows `noSD`.
+Every fruit is recorded as **one line on the Serial Monitor**, once its weight has been **stable for 1.5 s** (three readings within ±0.5 g). The next fruit is recorded only after the platform has been emptied, so a fruit resting on the scale is never counted twice.
 
-File format (illustrative values):
-
-```csv
-session,fruit,uptime_s,weight_g,category,servo_deg
-3,1,42,12.11,HEAVY,150
-3,2,55,10.53,LIGHT,30
+```text
+DATA,session,fruit,uptime_s,weight_g,category,servo_deg
+Weight: 12.08 g  -> servo 150
+DATA,3,1,42,12.11,HEAVY,150
+Weight: 0.01 g  -> servo 90
+DATA,3,2,55,10.53,LIGHT,30
 ```
 
-| Column | Meaning |
+<sub>Illustrative output. The <code>DATA,</code> prefix lets the dashboard pick these lines out of the regular <code>Weight:</code> messages.</sub>
+
+| Field | Meaning |
 |:--|:--|
 | `session` | Power-on counter stored in EEPROM, which increases at every start-up |
-| `fruit` | Fruit number within the session |
+| `fruit` | Fruit number within the session (also shown on the LCD as `#n`) |
 | `uptime_s` | Seconds since power-on. The Uno has no real-time clock, so there is no date or time of day |
 | `weight_g` | Stable weight in grams |
 | `category` | `LIGHT` or `HEAVY` |
@@ -237,16 +232,19 @@ session,fruit,uptime_s,weight_g,category,servo_deg
 
 A single HTML file, [`dashboard/index.html`](dashboard/index.html), that runs **completely offline** in your browser. Your data never leaves your computer.
 
-1. Take the microSD card out of the sorter and insert it into your computer.
-2. Double-click `dashboard/index.html` to open it in any modern browser.
-3. Click **Open CSV file** and choose `SOBUH.CSV`, or drag the file onto the page.
+1. Keep the sorter connected by USB and open the Arduino IDE **Serial Monitor** (9600 baud) while you sort.
+2. When you're done, click inside the Serial Monitor output and press <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+3. Double-click `dashboard/index.html` to open it in any modern browser.
+4. Click **Paste Serial output**, paste, and press **Show data**.
+
+Only lines containing `DATA,` are used, and Serial Monitor timestamps are fine. You can also save the output as a `.txt`/`.csv` file and use **Open file**, or drag it onto the page.
 
 You get:
 - **Summary cards:** fruits sorted, light vs. heavy counts and shares, mean ± SD weight, and range
 - **Charts:** the weight of every fruit with the threshold line, and a weight histogram
 - **Session filter**, to view one power-on session or all of them
 - **What-if threshold:** change the threshold to see how many fruits would switch category
-- **Table** of every logged fruit
+- **Table** of every recorded fruit
 
 No CSV yet? Click **Load example data**, or open `index.html#example`.
 
@@ -271,15 +269,16 @@ Performance test with key limes, using the **12 g** boundary:
 
 - **Single-fruit, small-mass setup.** The prototype was tested with small fruit (~10–14 g) and a 3 g "empty" threshold. Heavier produce needs a load cell with a suitable capacity and new thresholds.
 - **No conveyor.** Fruit is placed by hand, and the servo only selects the bin.
-- **Sorting doesn't wait for a stable weight.** The servo follows every reading (only the *logging* waits for stability), so a fruit dropped onto the platform may be sorted mid-bounce.
-- **No real-time clock.** Log rows have an uptime, not a date or time of day.
-- **Tight memory.** The Uno has only 2 KB of RAM. The SD library uses a large share of it, so adding many more features may require an Arduino Mega or an ESP32.
+- **Sorting doesn't wait for a stable weight.** The servo follows every reading (only the *recording* waits for stability), so a fruit dropped onto the platform may be sorted mid-bounce.
+- **No real-time clock.** Data lines have an uptime, not a date or time of day.
+- **Needs a computer for data.** Data is only captured while the Serial Monitor is open; nothing is stored on the device.
 - **Small test set.** The four-sample test demonstrates the concept but does not measure accuracy statistically.
 
 ## 🗺️ Ideas for future work
 
-- [x] Log every fruit to an **SD card** and view it in a **dashboard**
-- [ ] Use the stable weight for **sorting** too, not only for logging
+- [x] Output every fruit as data and view it in a **dashboard**
+- [ ] Store data on a **microSD card** module (planned in 2024) so no computer is needed
+- [ ] Use the stable weight for **sorting** too, not only for recording
 - [ ] Add an **RTC module** (e.g. DS3231) for real timestamps
 - [ ] Support **more than two grades** with a configurable threshold table
 - [ ] Add a **conveyor or chute** for continuous feeding
@@ -293,7 +292,7 @@ Performance test with key limes, using the **12 g** boundary:
 - **Team (Group 1, K3):** Syamsi Wirdiyan, Amalia Divie Soraya, Rizky Amelia
 - **Course:** Instrumentation and Control lab, Department of Mechanical and Biosystem Engineering, Faculty of Agricultural Engineering and Technology, IPB University (2024)
 - **Calibration routine:** adapted from the *Calibration* example of [HX711_ADC](https://github.com/olkal/HX711_ADC) by Olav Kallhovd (MIT)
-- **2026 repository, refactor, SD logging and dashboard:** prepared with the help of Claude (Anthropic's AI assistant)
+- **2026 repository, refactor and dashboard:** prepared with the help of Claude (Anthropic's AI assistant)
 
 ## 📄 License
 
