@@ -154,7 +154,8 @@ sobuh-fruit-sorter/
 │   └── sobuh_original/
 │       └── sobuh_original.ino    # sketch exactly as in the 2024 report
 ├── docs/images/                  # wiring, 3D design, flowchart, prototype photo
-├── LICENSE
+├── LICENSE                       # MIT
+├── THIRD_PARTY_NOTICES.md        # HX711_ADC (MIT) notice
 └── README.md
 ```
 
@@ -221,4 +222,4 @@ Performance test with key limes, using the **12 g** boundary:
 
 ## 📄 License
 
-Released under the [MIT License](LICENSE). The adapted HX711_ADC code keeps its own MIT notice, included in the same file.
+Released under the [MIT License](LICENSE). The adapted HX711_ADC code keeps its own MIT notice; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
